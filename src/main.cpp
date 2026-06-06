@@ -7,14 +7,21 @@
 #include <string>
 #include <sstream>
 
+
 int main(int argc, char** argv) {
-    std::string source = "0";
+    std::string source = "csi";
+    std::string model_path = "../models/yolo11n-pose.rknn";
 
     if (argc > 1) {
         source = argv[1];
     }
 
+    if (argc > 2) {
+        model_path = argv[2];
+    }
+
     std::cout << "Selected source: " << source << std::endl;
+    std::cout << "Selected model: " << model_path << std::endl;
 
     VideoSource video_source(source);
 
@@ -22,9 +29,14 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    FrameProcessor processor;
-    FpsMeter fps_meter;
+    FrameProcessor processor(model_path);
 
+    if (!processor.initialize()) {
+        std::cerr << "Failed to initialize frame processor" << std::endl;
+        return 1;
+    }
+
+    FpsMeter fps_meter;
     FramePacket packet;
 
     while (true) {
@@ -70,6 +82,9 @@ int main(int argc, char** argv) {
                     << ", read_ms: " << packet.read_ms
                     << ", convert_ms: " << packet.convert_ms
                     << ", process_ms: " << packet.process_ms
+                    << ", inference_ms: " << packet.inference_ms
+                    << ", postprocess_ms: " << packet.postprocess_ms
+                    << ", poses: " << packet.poses.size()
                     << std::endl;
         }
         if (packet.frame_id == 0) {

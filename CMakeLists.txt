@@ -12,6 +12,8 @@ add_executable(edge_pose_cpp
     src/video_source.cpp
     src/frame_processor.cpp
     src/fps_meter.cpp
+    src/pose_estimator.cpp
+    src/pose_renderer.cpp
 )
 
 target_include_directories(edge_pose_cpp PRIVATE
