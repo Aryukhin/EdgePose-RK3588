@@ -32,6 +32,8 @@ struct FramePacket {
     double read_ms = 0.0;
     double convert_ms = 0.0;
     double process_ms = 0.0;
+
+    double preprocess_ms = 0.0;
     double inference_ms = 0.0;
     double postprocess_ms = 0.0;
 

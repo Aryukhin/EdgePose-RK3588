@@ -22,6 +22,7 @@ bool FrameProcessor::process(FramePacket& packet) {
     if (!pose_estimator_.infer(
             packet.frame,
             packet.poses,
+            packet.preprocess_ms,
             packet.inference_ms,
             packet.postprocess_ms)) {
         return false;
@@ -42,8 +43,8 @@ bool FrameProcessor::process(FramePacket& packet) {
 
 void FrameProcessor::draw_debug_info(FramePacket& packet) {
     std::ostringstream text;
-    text << "Frame: " << packet.frame_id
-         << " Poses: " << packet.poses.size();
+    // text << "Frame: " << packet.frame_id
+    text  << " Poses: " << packet.poses.size();
 
     cv::putText(
         packet.frame,

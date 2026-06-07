@@ -1,16 +1,18 @@
 #include "video_source.hpp"
 #include "frame_processor.hpp"
 #include "fps_meter.hpp"
+#include "hdmi_sink.hpp"
 
 #include <opencv2/opencv.hpp>
-#include <iostream>
-#include <string>
-#include <sstream>
 
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
 
 int main(int argc, char** argv) {
     std::string source = "csi";
-    std::string model_path = "../models/yolo11n-pose.rknn";
+    std::string model_path = "../models/yolo11x-pose-fp16.rknn";
 
     if (argc > 1) {
         source = argv[1];
@@ -39,16 +41,18 @@ int main(int argc, char** argv) {
     FpsMeter fps_meter;
     FramePacket packet;
 
-    while (true) {
-        bool ok = video_source.read(packet);
+    std::unique_ptr<HdmiSink> hdmi_sink;
+    bool hdmi_enabled = true;
 
-        if (!ok) {
+    while (true) {
+        if (!video_source.read(packet)) {
             std::cout << "End of stream or failed to read frame" << std::endl;
             break;
         }
 
         if (!processor.process(packet)) {
-            std::cerr << "Failed to process frame" << std::endl;
+            std::cerr << "Failed to process frame "
+                      << packet.frame_id << std::endl;
             continue;
         }
 
@@ -67,40 +71,62 @@ int main(int argc, char** argv) {
             2
         );
 
-        // cv::imshow("edge_pose_cpp", packet.frame);
+        if (packet.frame_id % 30 == 0) {
+            std::cout
+                << "Processed frame: " << packet.frame_id
+                << ", size: " << packet.frame.cols
+                << "x" << packet.frame.rows
+                << ", fps: " << fps_meter.fps()
+                << ", read_ms: " << packet.read_ms
+                << ", convert_ms: " << packet.convert_ms
+                << ", preprocess_ms: " << packet.preprocess_ms
+                << ", inference_ms: " << packet.inference_ms
+                << ", postprocess_ms: " << packet.postprocess_ms
+                << ", process_ms: " << packet.process_ms
+                << ", poses: " << packet.poses.size()
+                << std::endl;
+        }
 
-        // int key = cv::waitKey(1);
-        // if (key == 'q' || key == 27) {
-        //     std::cout << "Exit requested" << std::endl;
+        /*
+         * Инициализируем HDMI-вывод после получения первого
+         * успешно обработанного кадра, когда уже известен его размер.
+         */
+        if (!hdmi_sink && hdmi_enabled) {
+            cv::imwrite("debug_frame.jpg", packet.frame);
+
+            hdmi_sink = std::make_unique<HdmiSink>(
+                packet.frame.cols,
+                packet.frame.rows,
+                1920,
+                1080,
+                30.0
+            );
+
+            if (!hdmi_sink->open()) {
+                std::cerr << "HDMI output disabled" << std::endl;
+                hdmi_sink.reset();
+                hdmi_enabled = false;
+            }
+        }
+
+        if (hdmi_enabled && hdmi_sink) {
+            if (!hdmi_sink->write(packet.frame)) {
+                std::cerr << "Failed to write frame to HDMI" << std::endl;
+                hdmi_sink->release();
+                hdmi_sink.reset();
+                hdmi_enabled = false;
+            }
+        }
+
+        // if (packet.frame_id >= 300) {
+        //     std::cout << "Reached max frames limit" << std::endl;
         //     break;
         // }
-        if (packet.frame_id % 30 == 0) {
-            std::cout << "Processed frame: " << packet.frame_id
-                    << ", size: " << packet.frame.cols
-                    << "x" << packet.frame.rows
-                    << ", fps: " << fps_meter.fps()
-                    << ", read_ms: " << packet.read_ms
-                    << ", convert_ms: " << packet.convert_ms
-                    << ", process_ms: " << packet.process_ms
-                    << ", inference_ms: " << packet.inference_ms
-                    << ", postprocess_ms: " << packet.postprocess_ms
-                    << ", poses: " << packet.poses.size()
-                    << std::endl;
-        }
-        if (packet.frame_id == 0) {
-            cv::imwrite("debug_frame.jpg", packet.frame);
-        }
-
-            // cv::imwrite("debug_frame.jpg", packet.frame);
-        //}
-
-        if (packet.frame_id >= 300) {
-            std::cout << "Reached max frames limit" << std::endl;
-            break;
-        }
     }
 
-    cv::destroyAllWindows();
+    if (hdmi_sink) {
+        hdmi_sink->release();
+    }
 
     return 0;
 }
